@@ -94,6 +94,13 @@ func (a *Agent) gatherCandidates(ctx context.Context) {
 				a.gatherCandidatesLocal(ctx, a.networkTypes)
 				wg.Done()
 			}()
+			if a.extIPMapper != nil && a.extIPMapper.candidateType == CandidateTypeHost {
+				wg.Add(1)
+				go func() {
+					a.gatherCandidatesHostMapped(ctx, a.networkTypes)
+					wg.Done()
+				}()
+			}
 		case CandidateTypeServerReflexive:
 			wg.Add(1)
 			go func() {
@@ -150,13 +157,13 @@ func (a *Agent) gatherCandidatesLocal(ctx context.Context, networkTypes []Networ
 
 	for _, ip := range localIPs {
 		mappedIP := ip
-		if a.mDNSMode != MulticastDNSModeQueryAndGather && a.extIPMapper != nil && a.extIPMapper.candidateType == CandidateTypeHost {
+		/*if a.mDNSMode != MulticastDNSModeQueryAndGather && a.extIPMapper != nil && a.extIPMapper.candidateType == CandidateTypeHost {
 			if _mappedIP, err := a.extIPMapper.findExternalIP(ip.String()); err == nil {
 				mappedIP = _mappedIP
 			} else {
 				a.log.Warnf("1:1 NAT mapping is enabled but no external IP is found for %s\n", ip.String())
 			}
-		}
+		}*/
 
 		address := mappedIP.String()
 		if a.mDNSMode == MulticastDNSModeQueryAndGather {
@@ -279,6 +286,13 @@ func (a *Agent) gatherCandidatesLocalUDPMux(ctx context.Context) error {
 }
 
 func (a *Agent) gatherCandidatesSrflxMapped(ctx context.Context, networkTypes []NetworkType) {
+	a.gatherCandidatesMapped(ctx, networkTypes, CandidateTypeServerReflexive)
+}
+func (a *Agent) gatherCandidatesHostMapped(ctx context.Context, networkTypes []NetworkType) {
+	a.gatherCandidatesMapped(ctx, networkTypes, CandidateTypeHost)
+}
+
+func (a *Agent) gatherCandidatesMapped(ctx context.Context, networkTypes []NetworkType, candidateType CandidateType) {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
@@ -305,26 +319,49 @@ func (a *Agent) gatherCandidatesSrflxMapped(ctx context.Context, networkTypes []
 				return
 			}
 
-			srflxConfig := CandidateServerReflexiveConfig{
-				Network:   network,
-				Address:   mappedIP.String(),
-				Port:      laddr.Port,
-				Component: ComponentRTP,
-				RelAddr:   laddr.IP.String(),
-				RelPort:   laddr.Port,
-			}
-			c, err := NewCandidateServerReflexive(&srflxConfig)
-			if err != nil {
-				closeConnAndLog(conn, a.log, fmt.Sprintf("Failed to create server reflexive candidate: %s %s %d: %v\n",
-					network,
-					mappedIP.String(),
-					laddr.Port,
-					err))
-				return
-			}
+			var candidate Candidate
+			if (candidateType == CandidateTypeHost){
+				hostConfig := CandidateHostConfig{
+					Network: network,
+					Address: mappedIP.String(),
+					Port: laddr.Port,
+					Component: ComponentRTP,
+					TCPType: TCPTypeUnspecified,
+				}
+				c, err := NewCandidateHost(&hostConfig)
+				if err != nil {
+					closeConnAndLog(conn, a.log, fmt.Sprintf("Failed to create host candidate: %s %s %d: %v",
+						network,
+						mappedIP.String(),
+						laddr.Port,
+						err))
+					return
+				}
+				candidate = c
+			} else if candidateType == CandidateTypeServerReflexive {
+				srflxConfig := CandidateServerReflexiveConfig{
+					Network:   network,
+					Address:   mappedIP.String(),
+					Port:      laddr.Port,
+					Component: ComponentRTP,
+					RelAddr:   laddr.IP.String(),
+					RelPort:   laddr.Port,
+				}
+				c, err := NewCandidateServerReflexive(&srflxConfig)
+				if err != nil {
+					closeConnAndLog(conn, a.log, fmt.Sprintf("Failed to create server reflexive candidate: %s %s %d: %v",
+						network,
+						mappedIP.String(),
+						laddr.Port,
+						err))
+					return
+				}
+				candidate = c
+ 			}
+ 
 
-			if err := a.addCandidate(ctx, c, conn); err != nil {
-				if closeErr := c.close(); closeErr != nil {
+			if err := a.addCandidate(ctx, candidate, conn); err != nil {
+				if closeErr := candidate.close(); closeErr != nil {
 					a.log.Warnf("Failed to close candidate: %v", closeErr)
 				}
 				a.log.Warnf("Failed to append to localCandidates and run onCandidateHdlr: %v\n", err)
