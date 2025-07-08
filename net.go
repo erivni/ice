@@ -8,6 +8,7 @@ import (
 
 	"github.com/pion/logging"
 	"github.com/pion/transport/v2"
+	"golang.org/x/net/ipv4"
 )
 
 // The conditions of invalidation written below are defined in
@@ -101,7 +102,7 @@ func localInterfaces(n transport.Net, interfaceFilter func(string) bool, ipFilte
 
 func listenUDPInPortRange(n transport.Net, log logging.LeveledLogger, portMax, portMin int, network string, lAddr *net.UDPAddr) (transport.UDPConn, error) {
 	if (lAddr.Port != 0) || ((portMin == 0) && (portMax == 0)) {
-		return n.ListenUDP(network, lAddr)
+		return listenUDP(n, network, lAddr)
 	}
 	var i, j int
 	i = portMin
@@ -120,7 +121,7 @@ func listenUDPInPortRange(n transport.Net, log logging.LeveledLogger, portMax, p
 	portCurrent := portStart
 	for {
 		lAddr = &net.UDPAddr{IP: lAddr.IP, Port: portCurrent}
-		c, e := n.ListenUDP(network, lAddr)
+		c, e := listenUDP(n, network, lAddr)
 		if e == nil {
 			return c, e //nolint:nilerr
 		}
@@ -134,4 +135,16 @@ func listenUDPInPortRange(n transport.Net, log logging.LeveledLogger, portMax, p
 		}
 	}
 	return nil, ErrPort
+}
+
+func listenUDP(n transport.Net, network string, lAddr *net.UDPAddr) (transport.UDPConn, error) {
+	c, e := n.ListenUDP(network, lAddr)
+	if e != nil {
+		return nil, e
+	}
+
+	rawConn := ipv4.NewConn(c)
+	const EF_DSCP = 46 << 2 // = 184
+	e = rawConn.SetTOS(EF_DSCP)
+	return c, e
 }
