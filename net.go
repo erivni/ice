@@ -102,7 +102,7 @@ func localInterfaces(n transport.Net, interfaceFilter func(string) bool, ipFilte
 
 func listenUDPInPortRange(n transport.Net, log logging.LeveledLogger, portMax, portMin int, network string, lAddr *net.UDPAddr) (transport.UDPConn, error) {
 	if (lAddr.Port != 0) || ((portMin == 0) && (portMax == 0)) {
-		return listenUDP(n, network, lAddr)
+		return listenUDP(n, log, network, lAddr)
 	}
 	var i, j int
 	i = portMin
@@ -121,7 +121,7 @@ func listenUDPInPortRange(n transport.Net, log logging.LeveledLogger, portMax, p
 	portCurrent := portStart
 	for {
 		lAddr = &net.UDPAddr{IP: lAddr.IP, Port: portCurrent}
-		c, e := listenUDP(n, network, lAddr)
+		c, e := listenUDP(n, log, network, lAddr)
 		if e == nil {
 			return c, e //nolint:nilerr
 		}
@@ -137,14 +137,18 @@ func listenUDPInPortRange(n transport.Net, log logging.LeveledLogger, portMax, p
 	return nil, ErrPort
 }
 
-func listenUDP(n transport.Net, network string, lAddr *net.UDPAddr) (transport.UDPConn, error) {
-	c, e := n.ListenUDP(network, lAddr)
-	if e != nil {
-		return nil, e
+func listenUDP(n transport.Net, log logging.LeveledLogger, network string, lAddr *net.UDPAddr) (transport.UDPConn, error) {
+	c, err := n.ListenUDP(network, lAddr)
+	if err != nil {
+		return nil, err
 	}
 
-	rawConn := ipv4.NewConn(c)
-	const EF_DSCP = 46 << 2 // = 184
-	e = rawConn.SetTOS(EF_DSCP)
-	return c, e
+	const EF_DSCP = 46 << 2 // DSCP EF (46)
+	if udpConn, ok := c.(*net.UDPConn); ok {
+		if err := ipv4.NewPacketConn(udpConn).SetTOS(EF_DSCP); err != nil {
+			log.Warnf("Failed to set TOS: %d. err: %v", EF_DSCP, err)
+			return c, err
+		}
+	}
+	return c, nil
 }
