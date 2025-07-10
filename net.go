@@ -8,6 +8,7 @@ import (
 
 	"github.com/pion/logging"
 	"github.com/pion/transport/v2"
+	"golang.org/x/net/ipv4"
 )
 
 // The conditions of invalidation written below are defined in
@@ -101,7 +102,7 @@ func localInterfaces(n transport.Net, interfaceFilter func(string) bool, ipFilte
 
 func listenUDPInPortRange(n transport.Net, log logging.LeveledLogger, portMax, portMin int, network string, lAddr *net.UDPAddr) (transport.UDPConn, error) {
 	if (lAddr.Port != 0) || ((portMin == 0) && (portMax == 0)) {
-		return n.ListenUDP(network, lAddr)
+		return listenUDP(n, log, network, lAddr)
 	}
 	var i, j int
 	i = portMin
@@ -120,7 +121,7 @@ func listenUDPInPortRange(n transport.Net, log logging.LeveledLogger, portMax, p
 	portCurrent := portStart
 	for {
 		lAddr = &net.UDPAddr{IP: lAddr.IP, Port: portCurrent}
-		c, e := n.ListenUDP(network, lAddr)
+		c, e := listenUDP(n, log, network, lAddr)
 		if e == nil {
 			return c, e //nolint:nilerr
 		}
@@ -134,4 +135,20 @@ func listenUDPInPortRange(n transport.Net, log logging.LeveledLogger, portMax, p
 		}
 	}
 	return nil, ErrPort
+}
+
+func listenUDP(n transport.Net, log logging.LeveledLogger, network string, lAddr *net.UDPAddr) (transport.UDPConn, error) {
+	c, err := n.ListenUDP(network, lAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	const EF_DSCP = 46 << 2 // DSCP EF (46)
+	if udpConn, ok := c.(*net.UDPConn); ok {
+		if err := ipv4.NewPacketConn(udpConn).SetTOS(EF_DSCP); err != nil {
+			log.Warnf("Failed to set TOS: %d. err: %v", EF_DSCP, err)
+			return c, err
+		}
+	}
+	return c, nil
 }
