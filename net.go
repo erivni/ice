@@ -147,6 +147,7 @@ func SetQoS(n transport.UDPConn, log logging.LeveledLogger) error {
 			log.Warnf("Failed to set TOS: %d. err: %v", EF_DSCP, err)
 			return err
 		}
+		log.Infof("Set QoS level to %d successfully", EF_DSCP)
 	} else {
 		log.Warnf("Provided transport.UDPConn is not a *net.UDPConn")
 	}
