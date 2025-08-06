@@ -218,6 +218,13 @@ func (a *Agent) gatherCandidatesLocal(ctx context.Context, networkTypes []Networ
 					continue
 				}
 
+				if a.enableQos {
+					err = SetQoS(conn, a.log)
+					if err != nil {
+						return
+					}
+				}
+
 				if udpConn, ok := conn.LocalAddr().(*net.UDPAddr); ok {
 					conns = append(conns, connAndPort{conn, udpConn.Port})
 				} else {
@@ -349,6 +356,13 @@ func (a *Agent) gatherCandidatesMapped(ctx context.Context, networkTypes []Netwo
 			if err != nil {
 				a.log.Warnf("Failed to listen %s: %v", network, err)
 				return
+			}
+
+			if a.enableQos {
+				err = SetQoS(conn, a.log)
+				if err != nil {
+					return
+				}
 			}
 
 			lAddr, ok := conn.LocalAddr().(*net.UDPAddr)
@@ -507,6 +521,15 @@ func (a *Agent) gatherCandidatesSrflx(ctx context.Context, urls []*stun.URI, net
 					closeConnAndLog(conn, a.log, "failed to listen for %s: %v", serverAddr.String(), err)
 					return
 				}
+
+				if a.enableQos {
+					err = SetQoS(conn, a.log)
+					if err != nil {
+						closeConnAndLog(conn, a.log, "failed to add QoS for %s: %v", serverAddr.String(), err)
+						return
+					}
+				}
+
 				// If the agent closes midway through the connection
 				// we end it early to prevent close delay.
 				cancelCtx, cancelFunc := context.WithCancel(ctx)
