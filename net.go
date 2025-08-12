@@ -4,11 +4,11 @@
 package ice
 
 import (
+	"golang.org/x/net/ipv4"
 	"net"
 
 	"github.com/pion/logging"
 	"github.com/pion/transport/v2"
-	"golang.org/x/net/ipv4"
 )
 
 // The conditions of invalidation written below are defined in
@@ -102,7 +102,7 @@ func localInterfaces(n transport.Net, interfaceFilter func(string) bool, ipFilte
 
 func listenUDPInPortRange(n transport.Net, log logging.LeveledLogger, portMax, portMin int, network string, lAddr *net.UDPAddr) (transport.UDPConn, error) {
 	if (lAddr.Port != 0) || ((portMin == 0) && (portMax == 0)) {
-		return listenUDP(n, log, network, lAddr)
+		return n.ListenUDP(network, lAddr)
 	}
 	var i, j int
 	i = portMin
@@ -121,7 +121,7 @@ func listenUDPInPortRange(n transport.Net, log logging.LeveledLogger, portMax, p
 	portCurrent := portStart
 	for {
 		lAddr = &net.UDPAddr{IP: lAddr.IP, Port: portCurrent}
-		c, e := listenUDP(n, log, network, lAddr)
+		c, e := n.ListenUDP(network, lAddr)
 		if e == nil {
 			return c, e //nolint:nilerr
 		}
@@ -137,18 +137,18 @@ func listenUDPInPortRange(n transport.Net, log logging.LeveledLogger, portMax, p
 	return nil, ErrPort
 }
 
-func listenUDP(n transport.Net, log logging.LeveledLogger, network string, lAddr *net.UDPAddr) (transport.UDPConn, error) {
-	c, err := n.ListenUDP(network, lAddr)
-	if err != nil {
-		return nil, err
+func SetTOS(n transport.UDPConn, tos int, log logging.LeveledLogger) error {
+	// Attempt type assertion to access net.UDPConn methods
+	if udpConn, ok := n.(*net.UDPConn); ok {
+		conn := ipv4.NewPacketConn(udpConn)
+		if err := conn.SetTOS(tos); err != nil {
+			log.Warnf("Failed to set TOS: %d. err: %v", tos, err)
+			return err
+		}
+		log.Infof("Set TOS to %d successfully", tos)
+	} else {
+		log.Warnf("Provided transport.UDPConn is not a *net.UDPConn")
 	}
 
-	const EF_DSCP = 46 << 2 // DSCP EF (46)
-	if udpConn, ok := c.(*net.UDPConn); ok {
-		if err := ipv4.NewPacketConn(udpConn).SetTOS(EF_DSCP); err != nil {
-			log.Warnf("Failed to set TOS: %d. err: %v", EF_DSCP, err)
-			return c, err
-		}
-	}
-	return c, nil
+	return nil
 }

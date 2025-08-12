@@ -75,6 +75,7 @@ type Agent struct {
 
 	tcpPriorityOffset uint16
 	disableActiveTCP  bool
+	qos               *int
 
 	portMin uint16
 	portMax uint16
@@ -321,6 +322,8 @@ func NewAgent(config *AgentConfig) (*Agent, error) { //nolint:gocognit
 		includeLoopback: config.IncludeLoopback,
 
 		disableActiveTCP: config.DisableActiveTCP,
+
+		qos: config.QoS,
 	}
 
 	if a.net == nil {
