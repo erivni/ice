@@ -218,8 +218,8 @@ func (a *Agent) gatherCandidatesLocal(ctx context.Context, networkTypes []Networ
 					continue
 				}
 
-				if a.enableQos {
-					err = SetQoS(conn, a.log)
+				if a.qos != nil {
+					err = SetTOS(conn, *a.qos, a.log)
 					if err != nil {
 						return
 					}
@@ -358,8 +358,8 @@ func (a *Agent) gatherCandidatesMapped(ctx context.Context, networkTypes []Netwo
 				return
 			}
 
-			if a.enableQos {
-				err = SetQoS(conn, a.log)
+			if a.qos != nil {
+				err = SetTOS(conn, *a.qos, a.log)
 				if err != nil {
 					return
 				}
@@ -522,11 +522,12 @@ func (a *Agent) gatherCandidatesSrflx(ctx context.Context, urls []*stun.URI, net
 					return
 				}
 
-				if a.enableQos {
-					err = SetQoS(conn, a.log)
+				if a.qos != nil {
+					err = SetTOS(conn, *a.qos, a.log)
 					if err != nil {
-						closeConnAndLog(conn, a.log, "failed to add QoS for %s: %v", serverAddr.String(), err)
+						closeConnAndLog(conn, a.log, "failed to add ToS for %s: %v", serverAddr.String(), err)
 						return
+
 					}
 				}
 

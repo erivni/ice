@@ -189,8 +189,8 @@ type AgentConfig struct {
 	// Active TCP candidates will be created when a new passive TCP remote candidate is added.
 	DisableActiveTCP bool
 
-	// EnableQoS can be used to enable QoS tag on each egress udp packet.
-	EnableQoS bool
+	// QoS can be used to enable QoS tag on each egress udp packet.
+	QoS *int
 }
 
 // initWithDefaults populates an agent and falls back to defaults if fields are unset

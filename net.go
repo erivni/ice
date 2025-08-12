@@ -137,17 +137,15 @@ func listenUDPInPortRange(n transport.Net, log logging.LeveledLogger, portMax, p
 	return nil, ErrPort
 }
 
-func SetQoS(n transport.UDPConn, log logging.LeveledLogger) error {
-	const EF_DSCP = 46 << 2 // Expedited Forwarding
-
+func SetTOS(n transport.UDPConn, tos int, log logging.LeveledLogger) error {
 	// Attempt type assertion to access net.UDPConn methods
 	if udpConn, ok := n.(*net.UDPConn); ok {
 		conn := ipv4.NewPacketConn(udpConn)
-		if err := conn.SetTOS(EF_DSCP); err != nil {
-			log.Warnf("Failed to set TOS: %d. err: %v", EF_DSCP, err)
+		if err := conn.SetTOS(tos); err != nil {
+			log.Warnf("Failed to set TOS: %d. err: %v", tos, err)
 			return err
 		}
-		log.Infof("Set QoS level to %d successfully", EF_DSCP)
+		log.Infof("Set TOS to %d successfully", tos)
 	} else {
 		log.Warnf("Provided transport.UDPConn is not a *net.UDPConn")
 	}
