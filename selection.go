@@ -289,24 +289,12 @@ type liteSelector struct {
 
 // A lite selector should not contact candidates
 func (s *liteSelector) ContactCandidates() {
-	if v, ok := s.pairCandidateSelector.(*controllingSelector); ok {
-		// RFC 8445 §6.1.1: Both lite agents — no connectivity checks are ever sent.
-		// RFC 8445 §6.2: The controlling lite agent selects a candidate pair based on the
-		// candidates in the exchange (static selection, no checks).
-		// RFC 8445 §8.2: For each component, if there is one candidate pair it is used directly.
-		if v.agent.getSelectedPair() != nil {
-			if v.agent.validateSelectedPair() {
-				v.log.Trace("Checking keepalive")
-				v.agent.checkKeepalive()
-			}
-		} else {
-			bestPair := v.agent.getBestAvailableCandidatePair()
-			if bestPair != nil {
-				v.log.Tracef("Lite controlling: selecting pair (%s, %s) without connectivity checks (RFC 8445 §6.2)",
-					bestPair.Local, bestPair.Remote)
-				v.agent.setSelectedPair(bestPair)
-			}
-		}
+	if _, ok := s.pairCandidateSelector.(*controllingSelector); ok {
+		//nolint:godox
+		// https://github.com/pion/ice/issues/96
+		// TODO: implement lite controlling agent. For now falling back to full agent.
+		// This only happens if both peers are lite. See RFC 8445 S6.1.1 and S6.2
+		s.pairCandidateSelector.ContactCandidates()
 	} else if v, ok := s.pairCandidateSelector.(*controlledSelector); ok {
 		v.agent.validateSelectedPair()
 	}
