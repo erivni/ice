@@ -253,7 +253,7 @@ func (s *controlledSelector) HandleBindingRequest(m *stun.Message, local, remote
 	if useCandidate {
 		// https://tools.ietf.org/html/rfc8445#section-7.3.1.5
 
-		if p.state == CandidatePairStateSucceeded {
+		if p.state == CandidatePairStateSucceeded || s.agent.lite {
 			// If the state of this pair is Succeeded, it means that the check
 			// previously sent by this pair produced a successful response and
 			// generated a valid pair (Section 7.2.5.3.2).  The agent sets the
@@ -278,7 +278,9 @@ func (s *controlledSelector) HandleBindingRequest(m *stun.Message, local, remote
 	}
 
 	s.agent.sendBindingSuccess(m, local, remote)
-	s.PingCandidate(local, remote)
+	if !s.agent.lite && (p.state != CandidatePairStateSucceeded || s.agent.getSelectedPair() == nil) {
+		s.PingCandidate(local, remote)
+	}
 }
 
 type liteSelector struct {
