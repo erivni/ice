@@ -253,16 +253,24 @@ func (s *controlledSelector) HandleBindingRequest(m *stun.Message, local, remote
 	if useCandidate {
 		// https://tools.ietf.org/html/rfc8445#section-7.3.1.5
 
-		if p.state == CandidatePairStateSucceeded || s.agent.lite {
+		if s.agent.lite {
+			// Pion represents membership in the valid list as Succeeded. RFC 8445
+			// Section 7.3.2 puts an accepted lite nomination directly into the
+			// valid list without an outbound triggered check.
+			p.state = CandidatePairStateSucceeded
+		}
+
+		if p.state == CandidatePairStateSucceeded {
 			// If the state of this pair is Succeeded, it means that the check
 			// previously sent by this pair produced a successful response and
 			// generated a valid pair (Section 7.2.5.3.2).  The agent sets the
 			// nominated flag value of the valid pair to true.
 			if selectedPair := s.agent.getSelectedPair(); selectedPair == nil ||
 				(selectedPair != p && selectedPair.priority() <= p.priority()) {
+                s.log.Infof("Found valid candidate pair: %s", p)
 				s.agent.setSelectedPair(p)
 			} else if selectedPair != p {
-				s.log.Tracef("Ignore nominate new pair %s, already nominated pair %s", p, selectedPair)
+				s.log.Warnf("Ignore nominate new pair %s, already nominated pair %s", p, selectedPair)
 			}
 		} else {
 			// If the received Binding request triggered a new check to be
